@@ -88,6 +88,9 @@ jobs:
           rm -rf feeds/cups/cups/patches
           echo "Old patches removed."
 
+          echo "=== Final Makefile ==="
+          cat "$MF"
+
       - name: Copy config files
         run: |
           cd $HOME/sdk/openwrt-sdk
@@ -116,9 +119,62 @@ jobs:
           echo "=== CUPS config entries ==="
           grep -i 'cups' .config || true
 
-      - name: Build CUPS package only
+      - name: Build CUPS package (first attempt - check install layout)
         run: |
           cd $HOME/sdk/openwrt-sdk
+          # First run make but allow failure so we can inspect
+          make package/cups/compile V=s -j1 || true
+
+          # Check what got installed and where
+          BDIR="build_dir/target-aarch64_cortex-a53_musl/cups-2.4.16"
+          echo "=== ipkg-install tree ==="
+          find "$BDIR/ipkg-install" -type f 2>/dev/null | head -50 || echo "no ipkg-install"
+          echo "=== Looking for libcups.so ==="
+          find "$BDIR" -name 'libcups.so*' 2>/dev/null
+          echo "=== Looking for cupsd ==="
+          find "$BDIR" -name 'cupsd' -type f 2>/dev/null
+          echo "=== Full DSTROOT layout ==="
+          find "$BDIR/ipkg-install" -type f 2>/dev/null || echo "empty"
+
+      - name: Fix install paths and rebuild if needed
+        run: |
+          cd $HOME/sdk/openwrt-sdk
+          BDIR="build_dir/target-aarch64_cortex-a53_musl/cups-2.4.16"
+          INST="$BDIR/ipkg-install"
+
+          # If libs ended up in /usr/lib64, symlink them to /usr/lib
+          if [ -d "$INST/usr/lib64" ] && [ ! -d "$INST/usr/lib" ]; then
+            echo "Fixing: moving lib64 to lib"
+            mv "$INST/usr/lib64" "$INST/usr/lib"
+          elif [ -d "$INST/usr/lib64" ] && [ -d "$INST/usr/lib" ]; then
+            echo "Fixing: merging lib64 into lib"
+            cp -a "$INST/usr/lib64/"* "$INST/usr/lib/"
+            rm -rf "$INST/usr/lib64"
+          fi
+
+          # If libs ended up in /usr/local/lib, fix that too
+          if [ -d "$INST/usr/local/lib" ]; then
+            echo "Fixing: moving /usr/local/lib to /usr/lib"
+            mkdir -p "$INST/usr/lib"
+            cp -a "$INST/usr/local/lib/"* "$INST/usr/lib/"
+          fi
+          if [ -d "$INST/usr/local" ]; then
+            echo "Fixing: merging /usr/local into /usr"
+            cp -a "$INST/usr/local/bin/"* "$INST/usr/bin/" 2>/dev/null || true
+            cp -a "$INST/usr/local/sbin/"* "$INST/usr/sbin/" 2>/dev/null || true
+            cp -a "$INST/usr/local/include/"* "$INST/usr/include/" 2>/dev/null || true
+            cp -a "$INST/usr/local/share/"* "$INST/usr/share/" 2>/dev/null || true
+          fi
+
+          echo "=== Fixed install layout ==="
+          find "$INST" -name 'libcups*' 2>/dev/null
+          find "$INST" -name 'cupsd' 2>/dev/null
+
+          # Now re-run the packaging step
+          # Remove stamp files to force re-packaging
+          rm -f "$BDIR/.pkgdir/"*stamp* 2>/dev/null || true
+          rm -f "$BDIR/.built_check" 2>/dev/null || true
+
           make package/cups/compile V=s -j1
 
       - name: Collect all CUPS related IPKs

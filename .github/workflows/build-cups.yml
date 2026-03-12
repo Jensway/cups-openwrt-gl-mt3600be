@@ -35,26 +35,25 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Override CUPS package with 2.4.16 Makefile
+      - name: Generate CUPS 2.4.16 Makefile with proper tabs
         run: |
           cd $HOME/sdk/openwrt-sdk
 
-          # Find where cups feed package lives
-          echo "=== Original cups Makefile ==="
-          head -20 feeds/cups/cups/Makefile
+          # Use Python script to generate Makefile with real tab characters
+          python3 $GITHUB_WORKSPACE/openwrt-cups-overlay/generate-makefile.py feeds/cups/cups/Makefile
 
-          # Replace with our custom 2.4.16 Makefile
-          cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/Makefile feeds/cups/cups/Makefile
+          # Verify tabs are present
+          echo "=== Checking for tabs ==="
+          cat -A feeds/cups/cups/Makefile | head -40
+          echo "..."
+          cat -A feeds/cups/cups/Makefile | grep -c "^I" || true
 
           # Copy init script and config files
           mkdir -p feeds/cups/cups/files/etc/cups
           cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/cupsd.init feeds/cups/cups/files/
           cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/etc/cups/cupsd.conf feeds/cups/cups/files/etc/cups/
 
-          echo "=== New cups Makefile (first 20 lines) ==="
-          head -20 feeds/cups/cups/Makefile
-
-          # Re-install feeds to pick up changes
+          # Re-install feeds
           ./scripts/feeds update -i
           ./scripts/feeds install -a
 

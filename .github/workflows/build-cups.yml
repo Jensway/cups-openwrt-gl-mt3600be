@@ -15,7 +15,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libncurses5-dev gawk \
-              unzip file wget python3 rsync
+              unzip file wget python3 python3-distutils rsync zlib1g-dev \
+              libelf-dev ecj fastjar java-propose-classpath
 
       - name: Download OpenWrt 21.02 aarch64_cortex-a53 SDK
         run: |
@@ -25,28 +26,58 @@ jobs:
           cd $HOME/sdk
           wget -q "$SDK_URL"
           tar xf "${SDK_DIR}.tar.xz"
-          ls -la
           mv "$SDK_DIR" openwrt-sdk
-          ls -la openwrt-sdk/
 
-      - name: Prepare feeds and CUPS package
+      - name: Prepare feeds and install CUPS
         run: |
           cd $HOME/sdk/openwrt-sdk
-          sed -i 's#src-git packages .*#src-git packages https://github.com/openwrt/packages.git;openwrt-21.02#' feeds.conf.default
+
+          # Use the cups feed that is known to work with OpenWrt 21.02
+          echo "src-git cups https://github.com/TheMMcOfficial/lede-cups.git" >> feeds.conf.default
+
           ./scripts/feeds update -a
-          ./scripts/feeds install cups
+          ./scripts/feeds install -a
+
+          # Verify cups package is found
+          find . -path '*/cups/Makefile' | head -20
+          ls -la feeds/cups/ 2>/dev/null || true
+          ls -la package/feeds/cups/ 2>/dev/null || true
+
+      - name: Configure and enable CUPS
+        run: |
+          cd $HOME/sdk/openwrt-sdk
+
+          # Generate default config
+          make defconfig
+
+          # Enable cups and all its libs as modules
+          sed -i 's/# CONFIG_PACKAGE_cups is not set/CONFIG_PACKAGE_cups=m/' .config 2>/dev/null || true
+          echo "CONFIG_PACKAGE_cups=m" >> .config
+          echo "CONFIG_PACKAGE_libcups=m" >> .config
+          echo "CONFIG_PACKAGE_libcupscgi=m" >> .config
+          echo "CONFIG_PACKAGE_libcupsmime=m" >> .config
+          echo "CONFIG_PACKAGE_libcupsppdc=m" >> .config
+
+          make defconfig
+
+          # Verify cups is selected
+          grep -i cups .config || true
 
       - name: Build CUPS package
         run: |
           cd $HOME/sdk/openwrt-sdk
-          make defconfig
-          ./scripts/feeds install cups
-          make package/cups/{clean,compile} V=sc -j$(nproc)
+
+          # Build with verbose output to see errors
+          make package/cups/compile V=s -j1 || \
+          make package/feeds/cups/cups/compile V=s -j1 || \
+          echo "Trying alternative make target..." && \
+          make V=s -j1
 
       - name: Collect all CUPS related IPKs
         run: |
           mkdir -p $HOME/cups-ipk-output
-          find $HOME/sdk/openwrt-sdk/bin -name '*.ipk' | while read f; do cp "$f" $HOME/cups-ipk-output/; done
+          find $HOME/sdk/openwrt-sdk/bin -name '*.ipk' -exec cp {} $HOME/cups-ipk-output/ \;
+          echo "=== Generated IPK files ==="
           ls -la $HOME/cups-ipk-output/
 
       - name: Upload IPK artifacts
@@ -54,3 +85,4 @@ jobs:
         with:
           name: cups-ipk
           path: ~/cups-ipk-output/*.ipk
+          if-no-files-found: error

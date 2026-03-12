@@ -1,0 +1,52 @@
+name: Build CUPS for GL-MT3600BE
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libncurses5-dev gawk \
+              unzip file wget python3 rsync
+
+      - name: Download OpenWrt 21.02 aarch64_cortex-a53 SDK
+        run: |
+          mkdir -p $HOME/sdk
+          cd $HOME/sdk
+          wget -q https://downloads.openwrt.org/releases/21.02.7/targets/mediatek/mt7622/openwrt-sdk-21.02.7-mediatek-mt7622_gcc-8.4.0_musl.Linux-x86_64.tar.xz
+          tar xf openwrt-sdk-*.tar.xz
+          mv openwrt-sdk-*-mediatek-mt7622* openwrt-sdk
+
+      - name: Prepare feeds and CUPS package
+        run: |
+          cd $HOME/sdk/openwrt-sdk
+          sed -i 's#src-git packages .*#src-git packages https://github.com/openwrt/packages.git;openwrt-21.02#' feeds.conf.default
+          ./scripts/feeds update -a
+          ./scripts/feeds install cups
+
+      - name: Build CUPS package
+        run: |
+          cd $HOME/sdk/openwrt-sdk
+          make defconfig
+          ./scripts/feeds install cups
+          make package/cups/{clean,compile} V=sc -j$(nproc)
+
+      - name: Collect all CUPS related IPKs
+        run: |
+          mkdir -p $HOME/cups-ipk-output
+          find $HOME/sdk/openwrt-sdk/bin -name '*.ipk' | while read f; do cp "$f" $HOME/cups-ipk-output/; done
+          ls -la $HOME/cups-ipk-output/
+
+      - name: Upload IPK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cups-ipk
+          path: ~/cups-ipk-output/*.ipk

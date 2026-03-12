@@ -35,20 +35,42 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Generate CUPS 2.4.16 Makefile with proper tabs
+      - name: Patch CUPS feed Makefile from 2.3.0 to 2.4.16
         run: |
           cd $HOME/sdk/openwrt-sdk
+          MF=feeds/cups/cups/Makefile
 
-          # Use Python script to generate Makefile with real tab characters
-          python3 $GITHUB_WORKSPACE/openwrt-cups-overlay/generate-makefile.py feeds/cups/cups/Makefile
+          echo "=== Before patch ==="
+          head -15 "$MF"
 
-          # Verify tabs are present
-          echo "=== Checking for tabs ==="
-          cat -A feeds/cups/cups/Makefile | head -40
+          # Change version
+          sed -i 's/^PKG_VERSION:=2.3.0$/PKG_VERSION:=2.4.16/' "$MF"
+          sed -i 's/^PKG_RELEASE:=2$/PKG_RELEASE:=1/' "$MF"
+
+          # Change source URL from Apple to OpenPrinting
+          sed -i 's|PKG_SOURCE_URL:=https://github.com/apple/cups/releases/download/v$(PKG_VERSION)|PKG_SOURCE_URL:=https://github.com/OpenPrinting/cups/releases/download/v$(PKG_VERSION)|' "$MF"
+
+          # Remove MD5 check (use skip for hash)
+          sed -i 's/^PKG_MD5SUM:=.*/PKG_HASH:=skip/' "$MF"
+
+          # Fix configure: replace old SSL flags with --with-tls=no
+          sed -i 's/--disable-gnutls \\$/--with-tls=no \\/' "$MF"
+          sed -i '/--disable-openssl \\/d' "$MF"
+          sed -i '/--disable-cdsassl \\/d' "$MF"
+          sed -i '/--disable-ssl \\/d' "$MF"
+
+          echo "=== After patch ==="
+          head -15 "$MF"
           echo "..."
-          cat -A feeds/cups/cups/Makefile | grep -c "^I" || true
+          grep -n 'tls\|ssl\|SSL\|VERSION\|SOURCE_URL\|HASH\|MD5' "$MF" || true
 
-          # Copy init script and config files
+          # Verify no tab issues (original file from git should have proper tabs)
+          echo "=== Tab check ==="
+          cat -A "$MF" | grep -c "^I" || echo "WARNING: no tab-indented lines found"
+
+      - name: Copy config files
+        run: |
+          cd $HOME/sdk/openwrt-sdk
           mkdir -p feeds/cups/cups/files/etc/cups
           cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/cupsd.init feeds/cups/cups/files/
           cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/etc/cups/cupsd.conf feeds/cups/cups/files/etc/cups/

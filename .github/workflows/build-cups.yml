@@ -1,4 +1,4 @@
-name: Build CUPS for GL-MT3600BE
+name: Build CUPS 2.4.16 for GL-MT3600BE
 
 on:
   workflow_dispatch: {}
@@ -28,16 +28,35 @@ jobs:
           tar xf "${SDK_DIR}.tar.xz"
           mv "$SDK_DIR" openwrt-sdk
 
-      - name: Prepare feeds and install CUPS
+      - name: Prepare feeds and install CUPS feed
         run: |
           cd $HOME/sdk/openwrt-sdk
           echo "src-git cups https://github.com/TheMMcOfficial/lede-cups.git" >> feeds.conf.default
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-          echo "=== Verify cups package location ==="
-          find . -path '*/cups/Makefile' 2>/dev/null | head -20
-          ls package/feeds/cups/ 2>/dev/null || true
+      - name: Override CUPS package with 2.4.16 Makefile
+        run: |
+          cd $HOME/sdk/openwrt-sdk
+
+          # Find where cups feed package lives
+          echo "=== Original cups Makefile ==="
+          head -20 feeds/cups/cups/Makefile
+
+          # Replace with our custom 2.4.16 Makefile
+          cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/Makefile feeds/cups/cups/Makefile
+
+          # Copy init script and config files
+          mkdir -p feeds/cups/cups/files/etc/cups
+          cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/cupsd.init feeds/cups/cups/files/
+          cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/etc/cups/cupsd.conf feeds/cups/cups/files/etc/cups/
+
+          echo "=== New cups Makefile (first 20 lines) ==="
+          head -20 feeds/cups/cups/Makefile
+
+          # Re-install feeds to pick up changes
+          ./scripts/feeds update -i
+          ./scripts/feeds install -a
 
       - name: Configure and enable CUPS
         run: |
@@ -46,9 +65,11 @@ jobs:
 
           echo "CONFIG_PACKAGE_cups=m" >> .config
           echo "CONFIG_PACKAGE_libcups=m" >> .config
-          echo "CONFIG_PACKAGE_libcupscgi=m" >> .config
-          echo "CONFIG_PACKAGE_libcupsmime=m" >> .config
-          echo "CONFIG_PACKAGE_libcupsppdc=m" >> .config
+          echo "CONFIG_PACKAGE_libcupsimage=m" >> .config
+          echo "CONFIG_PACKAGE_cups-bsd=m" >> .config
+          echo "CONFIG_PACKAGE_cups-client=m" >> .config
+          echo "CONFIG_PACKAGE_cups-filters=m" >> .config
+          echo "CONFIG_PACKAGE_cups-ppdc=m" >> .config
 
           make defconfig
           echo "=== CUPS config entries ==="
@@ -57,18 +78,7 @@ jobs:
       - name: Build CUPS package only
         run: |
           cd $HOME/sdk/openwrt-sdk
-
-          # Try the feeds path first, then the standard path
-          if make package/feeds/cups/cups/compile V=s -j1; then
-            echo "=== Build succeeded via package/feeds/cups/cups ==="
-          elif make package/cups/compile V=s -j1; then
-            echo "=== Build succeeded via package/cups ==="
-          else
-            echo "=== Both targets failed, listing available package targets ==="
-            ls package/feeds/cups/ 2>/dev/null
-            find . -name 'Makefile' -path '*/cups*' 2>/dev/null
-            exit 1
-          fi
+          make package/cups/compile V=s -j1
 
       - name: Collect all CUPS related IPKs
         run: |
@@ -80,6 +90,6 @@ jobs:
       - name: Upload IPK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: cups-ipk
+          name: cups-2.4.16-ipk
           path: ~/cups-ipk-output/*.ipk
           if-no-files-found: error

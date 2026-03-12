@@ -1,0 +1,20 @@
+#!/bin/sh /etc/rc.common
+
+START=60
+STOP=60
+
+start() {
+	mkdir -p /var/cache/cups /var/cups /var/log/cups /var/run/cups/certs /var/spool/cups/tmp
+	[ -f /etc/cups/cupsd.conf ] || cp /usr/share/cups/cupsd.conf.default /etc/cups/cupsd.conf 2>/dev/null
+	/usr/sbin/cupsd
+}
+
+stop() {
+	killall cupsd 2>/dev/null
+}
+
+restart() {
+	stop
+	sleep 1
+	start
+}

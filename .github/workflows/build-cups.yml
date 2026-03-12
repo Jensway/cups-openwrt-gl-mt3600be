@@ -35,6 +35,20 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
+      - name: Pre-download CUPS 2.4.16 source and compute hash
+        run: |
+          cd $HOME/sdk/openwrt-sdk
+          mkdir -p dl
+          wget -q -O dl/cups-2.4.16-source.tar.gz \
+            "https://github.com/OpenPrinting/cups/releases/download/v2.4.16/cups-2.4.16-source.tar.gz"
+          HASH=$(sha256sum dl/cups-2.4.16-source.tar.gz | awk '{print $1}')
+          echo "SHA256: $HASH"
+          echo "CUPS_HASH=$HASH" >> $GITHUB_ENV
+
+          # Check what directory the tarball extracts to
+          echo "=== Tarball top-level directory ==="
+          tar tzf dl/cups-2.4.16-source.tar.gz | head -5
+
       - name: Patch CUPS feed Makefile from 2.3.0 to 2.4.16
         run: |
           cd $HOME/sdk/openwrt-sdk
@@ -50,8 +64,8 @@ jobs:
           # Change source URL from Apple to OpenPrinting
           sed -i 's|PKG_SOURCE_URL:=https://github.com/apple/cups/releases/download/v$(PKG_VERSION)|PKG_SOURCE_URL:=https://github.com/OpenPrinting/cups/releases/download/v$(PKG_VERSION)|' "$MF"
 
-          # Remove MD5 check (use skip for hash)
-          sed -i 's/^PKG_MD5SUM:=.*/PKG_HASH:=skip/' "$MF"
+          # Replace MD5 with proper SHA256 hash
+          sed -i "s/^PKG_MD5SUM:=.*/PKG_HASH:=${{ env.CUPS_HASH }}/" "$MF"
 
           # Fix configure: replace old SSL flags with --with-tls=no
           sed -i 's/--disable-gnutls \\$/--with-tls=no \\/' "$MF"
@@ -60,11 +74,11 @@ jobs:
           sed -i '/--disable-ssl \\/d' "$MF"
 
           echo "=== After patch ==="
-          head -15 "$MF"
+          head -20 "$MF"
           echo "..."
-          grep -n 'tls\|ssl\|SSL\|VERSION\|SOURCE_URL\|HASH\|MD5' "$MF" || true
+          grep -n 'tls\|ssl\|SSL\|VERSION\|SOURCE_URL\|HASH\|MD5\|BUILD_DIR' "$MF" || true
 
-          # Verify no tab issues (original file from git should have proper tabs)
+          # Verify tabs
           echo "=== Tab check ==="
           cat -A "$MF" | grep -c "^I" || echo "WARNING: no tab-indented lines found"
 

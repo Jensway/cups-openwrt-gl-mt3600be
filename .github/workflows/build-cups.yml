@@ -82,6 +82,12 @@ jobs:
           echo "=== Tab check ==="
           cat -A "$MF" | grep -c "^I" || echo "WARNING: no tab-indented lines found"
 
+          # Remove old patches (written for 2.3.0, incompatible with 2.4.16)
+          echo "=== Removing old patches ==="
+          ls feeds/cups/cups/patches/ 2>/dev/null || echo "no patches dir"
+          rm -rf feeds/cups/cups/patches
+          echo "Old patches removed."
+
       - name: Copy config files
         run: |
           cd $HOME/sdk/openwrt-sdk

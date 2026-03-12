@@ -19,11 +19,15 @@ jobs:
 
       - name: Download OpenWrt 21.02 aarch64_cortex-a53 SDK
         run: |
+          SDK_URL="https://downloads.openwrt.org/releases/21.02.7/targets/mediatek/mt7622/openwrt-sdk-21.02.7-mediatek-mt7622_gcc-8.4.0_musl.Linux-x86_64.tar.xz"
+          SDK_DIR="openwrt-sdk-21.02.7-mediatek-mt7622_gcc-8.4.0_musl.Linux-x86_64"
           mkdir -p $HOME/sdk
           cd $HOME/sdk
-          wget -q https://downloads.openwrt.org/releases/21.02.7/targets/mediatek/mt7622/openwrt-sdk-21.02.7-mediatek-mt7622_gcc-8.4.0_musl.Linux-x86_64.tar.xz
-          tar xf openwrt-sdk-*.tar.xz
-          mv openwrt-sdk-*-mediatek-mt7622* openwrt-sdk
+          wget -q "$SDK_URL"
+          tar xf "${SDK_DIR}.tar.xz"
+          ls -la
+          mv "$SDK_DIR" openwrt-sdk
+          ls -la openwrt-sdk/
 
       - name: Prepare feeds and CUPS package
         run: |

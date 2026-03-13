@@ -1,0 +1,15 @@
+{
+	"luci-app-cups": {
+		"description": "Grant access to CUPS print server management",
+		"read": {
+			"ubus": {
+				"luci": ["*"]
+			}
+		},
+		"write": {
+			"ubus": {
+				"luci": ["*"]
+			}
+		}
+	}
+}

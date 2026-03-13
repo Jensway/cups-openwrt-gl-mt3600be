@@ -1,0 +1,46 @@
+<%-
+local sys = require "luci.sys"
+local running = (sys.call("pidof cupsd > /dev/null") == 0)
+local host = luci.http.getenv("HTTP_HOST") or "192.168.8.1"
+local port = 631
+local url = "http://" .. host:gsub(":.*", "") .. ":" .. port .. "/"
+-%>
+<div class="cbi-section">
+	<div class="cbi-section-descr"><%:OpenPrinting CUPS 2.4.16%></div>
+	<div class="cbi-section-node">
+		<p><strong><%:版本%>:</strong> OpenPrinting CUPS 2.4.16</p>
+		<p><strong><%:状态%>:</strong>
+			<% if running then %>
+				<span class="label success"><%:运行中%></span>
+			<% else %>
+				<span class="label"><%:已停止%></span>
+			<% end %>
+		</p>
+		<p><strong><%:Web 管理%>:</strong>
+			<a href="<%=url%>" target="_blank" rel="noopener"><%=url%></a>
+			<button type="button" class="btn" onclick="window.open('<%=url%>')"><%:打开%></button>
+		</p>
+		<div class="cbi-value">
+			<div class="cbi-value-field">
+				<% if running then %>
+					<form method="post" action="<%=luci.dispatcher.build_url("admin/services/cups/stop")%>" style="display:inline">
+						<input type="hidden" name="token" value="<%=token or ''%>" />
+						<button type="submit" class="btn cbi-button cbi-button-apply"><%:停止服务%></button>
+					</form>
+				<% else %>
+					<form method="post" action="<%=luci.dispatcher.build_url("admin/services/cups/start")%>" style="display:inline">
+						<input type="hidden" name="token" value="<%=token or ''%>" />
+						<button type="submit" class="btn cbi-button cbi-button-apply"><%:启动服务%></button>
+					</form>
+				<% end %>
+				<form method="post" action="<%=luci.dispatcher.build_url("admin/services/cups/disable")%>" style="display:inline;margin-left:8px">
+					<input type="hidden" name="token" value="<%=token or ''%>" />
+					<button type="submit" class="btn cbi-button cbi-button-reset" onclick="return confirm('<%:确定停止并禁用开机自启？%>')"><%:停止并禁用自启%></button>
+				</form>
+			</div>
+		</div>
+		<p class="cbi-value-description" style="margin-top:1em;color:#666">
+			<%:完全卸载%>: <code>opkg remove luci-app-cups cups cups-bsd cups-client cups-filters cups-ppdc libcupsimage libcups</code>
+		</p>
+	</div>
+</div>

@@ -97,6 +97,7 @@ jobs:
           mkdir -p feeds/cups/cups/files/etc/cups
           cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/cupsd.init feeds/cups/cups/files/
           cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/etc/cups/cupsd.conf feeds/cups/cups/files/etc/cups/
+          cp -r $GITHUB_WORKSPACE/luci-app-cups package/
 
           # Re-install feeds
           ./scripts/feeds update -i
@@ -114,6 +115,7 @@ jobs:
           echo "CONFIG_PACKAGE_cups-client=m" >> .config
           echo "CONFIG_PACKAGE_cups-filters=m" >> .config
           echo "CONFIG_PACKAGE_cups-ppdc=m" >> .config
+          echo "CONFIG_PACKAGE_luci-app-cups=m" >> .config
 
           make defconfig
           echo "=== CUPS config entries ==="
@@ -176,6 +178,11 @@ jobs:
           rm -f "$BDIR/.built_check" 2>/dev/null || true
 
           make package/cups/compile V=s -j1
+
+      - name: Build luci-app-cups
+        run: |
+          cd $HOME/sdk/openwrt-sdk
+          make package/luci-app-cups/compile V=s -j1
 
       - name: Collect all CUPS related IPKs
         run: |

@@ -97,23 +97,10 @@ jobs:
           mkdir -p feeds/cups/cups/files/etc/cups
           cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/cupsd.init feeds/cups/cups/files/
           cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/etc/cups/cupsd.conf feeds/cups/cups/files/etc/cups/
+          
           # Copy the pre-modified Makefile (with --libdir=/usr/lib)
+          # Our overlay Makefile already uses tabs, no need to convert
           cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/Makefile feeds/cups/cups/Makefile
-          
-          # CRITICAL: Convert spaces to tabs in Build/Configure section for OpenWrt
-          # OpenWrt Makefiles MUST use tabs, not spaces
-          sed -i '/^define Build\/Configure$/,|^endef$|s/^  /\t/' feeds/cups/cups/Makefile
-          # Also fix lines that start with -- (these are continuation lines)
-          sed -i '/^define Build\/Configure$/,|^endef$|s/^--/\t--/' feeds/cups/cups/Makefile
-          
-          # Verify tab conversion worked
-          echo "=== Tab verification ==="
-          if grep -P "^\t" feeds/cups/cups/Makefile | grep -q "call Build/Configure"; then
-            echo "OK: Tabs found in Build/Configure"
-          else
-            echo "WARNING: No tabs found, trying alternative..."
-            sed -i 's/^    /\t/' feeds/cups/cups/Makefile
-          fi
           
           # VERIFY: Show our key changes in the copied Makefile
           echo "=== VERIFY: Key Makefile sections ==="

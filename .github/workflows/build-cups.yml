@@ -168,14 +168,19 @@ jobs:
             cp -a "$INST/usr/local/share/"* "$INST/usr/share/" 2>/dev/null || true
           fi
 
+          # Fallback: if libcups still not in usr/lib, find and copy from anywhere in build
+          if ! ls "$INST/usr/lib/libcups.so"* 1>/dev/null 2>&1; then
+            echo "Fallback: searching for libcups.so in build tree"
+            mkdir -p "$INST/usr/lib"
+            find "$BDIR" -name 'libcups.so*' -type f -exec cp -fp {} "$INST/usr/lib/" \;
+          fi
+
           echo "=== Fixed install layout ==="
           find "$INST" -name 'libcups*' 2>/dev/null
           find "$INST" -name 'cupsd' 2>/dev/null
 
-          # Now re-run the packaging step
-          # Remove stamp files to force re-packaging
+          # Now re-run the packaging step (do NOT remove .built_check or it will rebuild and overwrite our fix)
           rm -f "$BDIR/.pkgdir/"*stamp* 2>/dev/null || true
-          rm -f "$BDIR/.built_check" 2>/dev/null || true
 
           make package/cups/compile V=s -j1
 

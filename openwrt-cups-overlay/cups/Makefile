@@ -117,40 +117,54 @@ define Package/libcupsimage/description
 endef
 
 define Build/Configure
- $(call Build/Configure/Default, \
- --with-cups-user="nobody" \
- --with-cups-group="nogroup" \
- --with-system-groups="root" \
- --with-pdftops="none" \
- --with-tls=no \
- --without-perl \
- --without-python \
- --without-php \
- --enable-default-shared \
- --enable-shared \
- --enable-image \
- --enable-libusb \
- --disable-acl \
- --disable-dnssd \
- --disable-dbus \
- --disable-avahi \
- --disable-launchd \
- --disable-ldap \
- --disable-pam \
- --disable-slp \
- --disable-gssapi \
- --disable-tiff, \
- UNAME="Linux" \
- LIBS="$(TARGET_LDFLAGS) -lz -lpng -ljpeg" \
+	$(call Build/Configure/Default, \
+		--with-cups-user="nobody" \
+		--with-cups-group="nogroup" \
+		--with-system-groups="root" \
+		--with-pdftops="none" \
+		--with-tls=no \
+		--libdir=/usr/lib \
+		--without-perl \
+		--without-python \
+		--without-php \
+		--enable-default-shared \
+		--enable-shared \
+		--disable-static \
+		--enable-image \
+		--enable-libusb \
+		--disable-acl \
+		--disable-dnssd \
+		--disable-dbus \
+		--disable-avahi \
+		--disable-launchd \
+		--disable-ldap \
+		--disable-pam \
+		--disable-slp \
+		--disable-gssapi \
+		--disable-tiff, \
+		UNAME="Linux" \
+		LIBS="$(TARGET_LDFLAGS) -lz -lpng -ljpeg" \
  )
 endef
 
 define Build/Compile
- $(MAKE) -C $(PKG_BUILD_DIR) \
- $(TARGET_CONFIGURE_OPTS) \
- DSTROOT="$(PKG_INSTALL_DIR)" \
- STRIP="/bin/true" \
- all install
+	$(MAKE) -C $(PKG_BUILD_DIR) \
+		$(TARGET_CONFIGURE_OPTS) \
+		DSTROOT="$(PKG_INSTALL_DIR)" \
+		STRIP="/bin/true" \
+		all install
+
+	# Debug: show what was installed
+	-@ls -la $(PKG_INSTALL_DIR)/usr/lib/ 2>/dev/null || true
+	-@find $(PKG_INSTALL_DIR) -name 'libcups.so*' -type f 2>/dev/null || true
+
+	# Fix library installation paths after install
+	# CUPS may install to lib64 or /usr/local/lib instead of /usr/lib
+	(cd $(PKG_INSTALL_DIR) && \
+	 (if [ -d usr/lib64 ] && [ ! -d usr/lib ]; then mv usr/lib64 usr/lib; fi; \
+	 if [ -d usr/lib64 ] && [ -d usr/lib ]; then cp -a usr/lib64/* usr/lib/ 2>/dev/null; rm -rf usr/lib64; fi; \
+	 if [ -d usr/local/lib ]; then mkdir -p usr/lib; cp -a usr/local/lib/* usr/lib/ 2>/dev/null; fi; \
+	 if [ -d usr/local ]; then cp -a usr/local/bin/* usr/bin/ 2>/dev/null; cp -a usr/local/sbin/* usr/sbin/ 2>/dev/null; fi))
 endef
 
 define Package/cups/install
@@ -250,12 +264,20 @@ endef
 
 define Package/libcups/install
  $(INSTALL_DIR) $(1)/usr/lib
- $(CP) $(PKG_INSTALL_DIR)/usr/lib/libcups.so* $(1)/usr/lib/
+ # Try to find libcups.so in various locations (check standard paths first)
+ $(CP) $(PKG_INSTALL_DIR)/usr/lib/libcups.so* $(1)/usr/lib/ 2>/dev/null || \
+ $(CP) $(PKG_INSTALL_DIR)/usr/lib64/libcups.so* $(1)/usr/lib/ 2>/dev/null || \
+ $(CP) $(PKG_INSTALL_DIR)/usr/local/lib/libcups.so* $(1)/usr/lib/ 2>/dev/null || \
+ $(CP) $$(find $(PKG_INSTALL_DIR) -name 'libcups.so*' -type f 2>/dev/null) $(1)/usr/lib/ 2>/dev/null || true
 endef
 
 define Package/libcupsimage/install
  $(INSTALL_DIR) $(1)/usr/lib
- $(CP) $(PKG_INSTALL_DIR)/usr/lib/libcupsimage.so* $(1)/usr/lib/
+ # Try to find libcupsimage.so in various locations
+ $(CP) $(PKG_INSTALL_DIR)/usr/lib/libcupsimage.so* $(1)/usr/lib/ 2>/dev/null || \
+ $(CP) $(PKG_INSTALL_DIR)/usr/lib64/libcupsimage.so* $(1)/usr/lib/ 2>/dev/null || \
+ $(CP) $(PKG_INSTALL_DIR)/usr/local/lib/libcupsimage.so* $(1)/usr/lib/ 2>/dev/null || \
+ $(CP) $$(find $(PKG_INSTALL_DIR) -name 'libcupsimage.so*' -type f 2>/dev/null) $(1)/usr/lib/ 2>/dev/null || true
 endef
 
 define Build/InstallDev

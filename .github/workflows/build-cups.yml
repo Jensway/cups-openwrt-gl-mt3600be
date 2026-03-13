@@ -91,22 +91,42 @@ jobs:
           echo "=== Final Makefile ==="
           cat "$MF"
 
-      - name: Copy config files
+      - name: Copy config files and Makefile
         run: |
           cd $HOME/sdk/openwrt-sdk
           mkdir -p feeds/cups/cups/files/etc/cups
           cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/cupsd.init feeds/cups/cups/files/
           cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/etc/cups/cupsd.conf feeds/cups/cups/files/etc/cups/
+          # Copy the pre-modified Makefile (with --libdir=/usr/lib)
+          cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/Makefile feeds/cups/cups/Makefile
+          
+          # CRITICAL: Convert spaces to tabs in Build/Configure section for OpenWrt
+          # OpenWrt Makefiles MUST use tabs, not spaces
+          sed -i '/^define Build\/Configure$/,|^endef$|s/^  /\t/' feeds/cups/cups/Makefile
+          # Also fix lines that start with -- (these are continuation lines)
+          sed -i '/^define Build\/Configure$/,|^endef$|s/^--/\t--/' feeds/cups/cups/Makefile
+          
+          # Verify tab conversion worked
+          echo "=== Tab verification ==="
+          if grep -P "^\t" feeds/cups/cups/Makefile | grep -q "call Build/Configure"; then
+            echo "OK: Tabs found in Build/Configure"
+          else
+            echo "WARNING: No tabs found, trying alternative..."
+            sed -i 's/^    /\t/' feeds/cups/cups/Makefile
+          fi
+          
           cp -r $GITHUB_WORKSPACE/luci-app-cups package/
-
-          # Re-install feeds
-          ./scripts/feeds update -i
-          ./scripts/feeds install -a
+          # IMPORTANT: Do NOT run feeds install again here.
+          # It can overwrite feeds/cups/cups/Makefile and undo our overlay copy.
 
       - name: Configure and enable CUPS
         run: |
           cd $HOME/sdk/openwrt-sdk
           make defconfig
+
+          # Verify Makefile was copied correctly
+          echo "=== CUPS Makefile configure section ==="
+          grep -A 30 "define Build/Configure" feeds/cups/cups/Makefile | head -35
 
           echo "CONFIG_PACKAGE_cups=m" >> .config
           echo "CONFIG_PACKAGE_libcups=m" >> .config
@@ -124,25 +144,55 @@ jobs:
       - name: Build CUPS package (first attempt - check install layout)
         run: |
           cd $HOME/sdk/openwrt-sdk
+          # Check configure generated
+          BDIR="build_dir/target-aarch64_cortex-a53_musl/cups-2.4.16"
+          if [ -f "$BDIR/Makefile" ]; then
+            echo "=== CUPS generated Makefile config ==="
+            grep "enable-shared\|disable-static\|libdir" "$BDIR/Makefile" | head -10 || true
+            echo "=== CUPS config.log summary ==="
+            grep -i "shared\|static\|libdir" "$BDIR/config.log" | head -20 || true
+          else
+            echo "No Makefile yet in BDIR"
+          fi
+
           # First run make but allow failure so we can inspect
-          make package/cups/compile V=s -j1 || true
+          make package/cups/compile V=s -j1 2>&1 | tee /tmp/cups-build.log || true
 
           # Check what got installed and where
           BDIR="build_dir/target-aarch64_cortex-a53_musl/cups-2.4.16"
+          echo "=== Build log (last 50 lines) ==="
+          tail -50 /tmp/cups-build.log 2>/dev/null || echo "no log"
+          echo "=== Check if BDIR exists ==="
+          ls -la "$BDIR" 2>/dev/null || echo "BDIR does NOT exist"
+          echo "=== Check if ipkg-install exists ==="
+          ls -la "$BDIR/ipkg-install" 2>/dev/null || echo "ipkg-install does NOT exist"
           echo "=== ipkg-install tree ==="
           find "$BDIR/ipkg-install" -type f 2>/dev/null | head -50 || echo "no ipkg-install"
           echo "=== Looking for libcups.so ==="
           find "$BDIR" -name 'libcups.so*' 2>/dev/null
+          echo "=== Looking for libcups in lib64 ==="
+          find "$BDIR" -path '*/lib64/*' -name 'libcups.so*' 2>/dev/null
           echo "=== Looking for cupsd ==="
           find "$BDIR" -name 'cupsd' -type f 2>/dev/null
           echo "=== Full DSTROOT layout ==="
           find "$BDIR/ipkg-install" -type f 2>/dev/null || echo "empty"
+          echo "=== List ALL directories in ipkg-install ==="
+          find "$BDIR/ipkg-install" -type d 2>/dev/null | head -30
+          echo "=== Look for ALL .so files anywhere in build dir ==="
+          find "$BDIR" -name '*.so*' -type f 2>/dev/null | head -20
 
       - name: Fix install paths and rebuild if needed
         run: |
           cd $HOME/sdk/openwrt-sdk
           BDIR="build_dir/target-aarch64_cortex-a53_musl/cups-2.4.16"
           INST="$BDIR/ipkg-install"
+
+          echo "=== DEBUG: Checking ipkg-install directory ==="
+          ls -la "$INST" 2>/dev/null || echo "ERROR: $INST does not exist"
+          echo "=== DEBUG: Checking for /usr/lib ==="
+          ls -la "$INST/usr/lib" 2>/dev/null || echo "ERROR: $INST/usr/lib does not exist"
+          echo "=== DEBUG: Checking for /usr/lib64 ==="
+          ls -la "$INST/usr/lib64" 2>/dev/null || echo "ERROR: $INST/usr/lib64 does not exist"
 
           # If libs ended up in /usr/lib64, symlink them to /usr/lib
           if [ -d "$INST/usr/lib64" ] && [ ! -d "$INST/usr/lib" ]; then

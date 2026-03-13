@@ -281,12 +281,12 @@ define Package/libcupsimage/install
 endef
 
 define Build/InstallDev
- $(INSTALL_DIR) $(2)/bin
- $(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/cups-config $(2)/bin/
- $(INSTALL_DIR) $(1)/usr/include
- $(CP) $(PKG_INSTALL_DIR)/usr/include/cups $(1)/usr/include/
- $(INSTALL_DIR) $(1)/usr/lib
- $(CP) $(PKG_INSTALL_DIR)/usr/lib/libcups*.so* $(1)/usr/lib/
+	$(INSTALL_DIR) $(2)/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/cups-config $(2)/bin/
+	$(INSTALL_DIR) $(1)/usr/include
+	$(CP) $(PKG_INSTALL_DIR)/usr/include/cups $(1)/usr/include/
+	$(INSTALL_DIR) $(1)/usr/lib
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libcups*.so* $(1)/usr/lib/
 endef
 
 $(eval $(call BuildPackage,cups))

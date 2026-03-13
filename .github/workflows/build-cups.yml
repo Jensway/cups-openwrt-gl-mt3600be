@@ -115,6 +115,13 @@ jobs:
             sed -i 's/^    /\t/' feeds/cups/cups/Makefile
           fi
           
+          # VERIFY: Show our key changes in the copied Makefile
+          echo "=== VERIFY: Key Makefile sections ==="
+          echo "--- Build/Configure (should have --libdir=/usr/lib --enable-shared) ---"
+          grep -A 5 "define Build/Configure" feeds/cups/cups/Makefile | head -10
+          echo "--- Package/libcups/install (should have fallback logic) ---"
+          grep -A 5 "define Package/libcups/install" feeds/cups/cups/Makefile | head -10
+          
           cp -r $GITHUB_WORKSPACE/luci-app-cups package/
           # IMPORTANT: Do NOT run feeds install again here.
           # It can overwrite feeds/cups/cups/Makefile and undo our overlay copy.
@@ -144,6 +151,17 @@ jobs:
       - name: Build CUPS package (first attempt - check install layout)
         run: |
           cd $HOME/sdk/openwrt-sdk
+          
+          # CRITICAL: Clean up old build artifacts to ensure our Makefile is used
+          echo "=== Cleaning old build artifacts ==="
+          rm -rf build_dir/target-aarch64_cortex-a53_musl/cups-2.4.16
+          rm -f bin/packages/*/cups_* 2>/dev/null || true
+          
+          # Double-check: Verify our Makefile is in place BEFORE building
+          echo "=== VERIFY: Makefile just before build ==="
+          echo "--- Package/libcups/install section ---"
+          grep -A 3 "define Package/libcups/install" feeds/cups/cups/Makefile
+          
           # Check configure generated
           BDIR="build_dir/target-aarch64_cortex-a53_musl/cups-2.4.16"
           if [ -f "$BDIR/Makefile" ]; then

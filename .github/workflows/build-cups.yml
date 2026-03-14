@@ -140,7 +140,7 @@ jobs:
           fi
 
           # First run make but allow failure so we can inspect
-          make package/cups/compile V=s -j1 2>&1 | tee /tmp/cups-build.log || true
+          make feeds/cups/cups/compile V=s -j1 2>&1 | tee /tmp/cups-build.log || true
 
           # Check what got installed and where
           BDIR="build_dir/target-aarch64_cortex-a53_musl/cups-2.4.16"

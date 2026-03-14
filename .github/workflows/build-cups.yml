@@ -28,12 +28,20 @@ jobs:
           tar xf "${SDK_DIR}.tar.xz"
           mv "$SDK_DIR" openwrt-sdk
 
-      - name: Prepare feeds and install CUPS feed
+      - name: Prepare feeds (use packages feed but remove old libcups)
         run: |
           cd $HOME/sdk/openwrt-sdk
-          echo "src-git cups https://github.com/TheMMcOfficial/lede-cups.git" >> feeds.conf.default
+          # Update default feeds (packages, luci, routing, telephony)
           ./scripts/feeds update -a
-          ./scripts/feeds install -a
+          ./scripts/feeds install -a -p packages
+          
+          # IMPORTANT: Remove packages feed's old libcups to avoid version conflict
+          # Our feeds/cups/cups (to be copied later) provides libcups 2.4.16
+          rm -rf feeds/packages/libs/libcups
+          rm -rf feeds/packages/libs/libcupsimage
+          
+          # Install base packages needed for build
+          ./scripts/feeds install -a -p luci
 
       - name: Pre-download CUPS 2.4.16 source and compute hash
         run: |
@@ -49,47 +57,10 @@ jobs:
           echo "=== Tarball top-level directory ==="
           tar tzf dl/cups-2.4.16-source.tar.gz | head -5
 
-      - name: Patch CUPS feed Makefile from 2.3.0 to 2.4.16
+      - name: Create CUPS feed directory structure
         run: |
           cd $HOME/sdk/openwrt-sdk
-          MF=feeds/cups/cups/Makefile
-
-          echo "=== Before patch ==="
-          head -15 "$MF"
-
-          # Change version
-          sed -i 's/^PKG_VERSION:=2.3.0$/PKG_VERSION:=2.4.16/' "$MF"
-          sed -i 's/^PKG_RELEASE:=2$/PKG_RELEASE:=1/' "$MF"
-
-          # Change source URL from Apple to OpenPrinting
-          sed -i 's|PKG_SOURCE_URL:=https://github.com/apple/cups/releases/download/v$(PKG_VERSION)|PKG_SOURCE_URL:=https://github.com/OpenPrinting/cups/releases/download/v$(PKG_VERSION)|' "$MF"
-
-          # Replace MD5 with proper SHA256 hash
-          sed -i "s/^PKG_MD5SUM:=.*/PKG_HASH:=${{ env.CUPS_HASH }}/" "$MF"
-
-          # Fix configure: replace old SSL flags with --with-tls=no
-          sed -i 's/--disable-gnutls \\$/--with-tls=no \\/' "$MF"
-          sed -i '/--disable-openssl \\/d' "$MF"
-          sed -i '/--disable-cdsassl \\/d' "$MF"
-          sed -i '/--disable-ssl \\/d' "$MF"
-
-          echo "=== After patch ==="
-          head -20 "$MF"
-          echo "..."
-          grep -n 'tls\|ssl\|SSL\|VERSION\|SOURCE_URL\|HASH\|MD5\|BUILD_DIR' "$MF" || true
-
-          # Verify tabs
-          echo "=== Tab check ==="
-          cat -A "$MF" | grep -c "^I" || echo "WARNING: no tab-indented lines found"
-
-          # Remove old patches (written for 2.3.0, incompatible with 2.4.16)
-          echo "=== Removing old patches ==="
-          ls feeds/cups/cups/patches/ 2>/dev/null || echo "no patches dir"
-          rm -rf feeds/cups/cups/patches
-          echo "Old patches removed."
-
-          echo "=== Final Makefile ==="
-          cat "$MF"
+          mkdir -p feeds/cups/cups/files/etc/cups
 
       - name: Copy config files and Makefile
         run: |

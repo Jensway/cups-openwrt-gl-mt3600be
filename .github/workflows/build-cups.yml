@@ -98,9 +98,15 @@ jobs:
           cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/cupsd.init feeds/cups/cups/files/
           cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/etc/cups/cupsd.conf feeds/cups/cups/files/etc/cups/
           
-          # Copy the pre-modified Makefile (with --libdir=/usr/lib)
-          # Our overlay Makefile already uses tabs, no need to convert
+          # Copy the pre-modified Makefile
           cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/Makefile feeds/cups/cups/Makefile
+          
+          # CRITICAL: Convert leading spaces (4 spaces) to tabs in all define blocks
+          # This is required for OpenWrt Makefiles - make requires tabs, not spaces
+          sed -i 's/^    /\t/g' feeds/cups/cups/Makefile
+          
+          # Also convert 2-space indentation used in some sections
+          sed -i 's/^  /\t/g' feeds/cups/cups/Makefile
           
           # VERIFY: Show our key changes in the copied Makefile
           echo "=== VERIFY: Key Makefile sections ==="

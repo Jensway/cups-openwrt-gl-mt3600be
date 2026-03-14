@@ -36,7 +36,6 @@ jobs:
           ./scripts/feeds install -a -p packages
           
           # IMPORTANT: Remove packages feed's old libcups to avoid version conflict
-          # Our feeds/cups/cups (to be copied later) provides libcups 2.4.16
           rm -rf feeds/packages/libs/libcups
           rm -rf feeds/packages/libs/libcupsimage
           
@@ -57,40 +56,39 @@ jobs:
           echo "=== Tarball top-level directory ==="
           tar tzf dl/cups-2.4.16-source.tar.gz | head -5
 
-      - name: Create CUPS feed directory structure
+      - name: Copy CUPS overlay to package directory
         run: |
           cd $HOME/sdk/openwrt-sdk
-          mkdir -p feeds/cups/cups/files/etc/cups
-
-      - name: Copy config files and Makefile
-        run: |
-          cd $HOME/sdk/openwrt-sdk
-          mkdir -p feeds/cups/cups/files/etc/cups
-          cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/cupsd.init feeds/cups/cups/files/
-          cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/etc/cups/cupsd.conf feeds/cups/cups/files/etc/cups/
           
-          # Copy the pre-modified Makefile
-          cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/Makefile feeds/cups/cups/Makefile
+          # Copy our CUPS overlay directly to package/ directory
+          # This is the correct way to add custom packages in OpenWrt SDK
+          rm -rf package/cups
+          cp -r $GITHUB_WORKSPACE/openwrt-cups-overlay/cups package/cups
+          
+          # Create necessary directories
+          mkdir -p package/cups/files/etc/cups
+          
+          # Copy config files
+          cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/cupsd.init package/cups/files/
+          cp $GITHUB_WORKSPACE/openwrt-cups-overlay/cups/files/etc/cups/cupsd.conf package/cups/files/etc/cups/
           
           # CRITICAL: Convert leading spaces (4 spaces) to tabs in all define blocks
           # This is required for OpenWrt Makefiles - make requires tabs, not spaces
           # Run multiple times to handle any number of leading spaces
-          for i in 1 2 3 4 5; do sed -i 's/^ /\t/g' feeds/cups/cups/Makefile; done
+          for i in 1 2 3 4 5; do sed -i 's/^ /\t/g' package/cups/Makefile; done
           
           # DEBUG: Verify the actual characters around line 292
           echo "=== DEBUG: Line 292 content ==="
-          sed -n '290,295p' feeds/cups/cups/Makefile | cat -A
+          sed -n '290,295p' package/cups/Makefile | cat -A
           
           # VERIFY: Show our key changes in the copied Makefile
           echo "=== VERIFY: Key Makefile sections ==="
           echo "--- Build/Configure (should have --libdir=/usr/lib --enable-shared) ---"
-          grep -A 5 "define Build/Configure" feeds/cups/cups/Makefile | head -10
+          grep -A 5 "define Build/Configure" package/cups/Makefile | head -10
           echo "--- Package/libcups/install (should have fallback logic) ---"
-          grep -A 5 "define Package/libcups/install" feeds/cups/cups/Makefile | head -10
+          grep -A 5 "define Package/libcups/install" package/cups/Makefile | head -10
           
           cp -r $GITHUB_WORKSPACE/luci-app-cups package/
-          # IMPORTANT: Do NOT run feeds install again here.
-          # It can overwrite feeds/cups/cups/Makefile and undo our overlay copy.
 
       - name: Configure and enable CUPS
         run: |
@@ -99,7 +97,7 @@ jobs:
 
           # Verify Makefile was copied correctly
           echo "=== CUPS Makefile configure section ==="
-          grep -A 30 "define Build/Configure" feeds/cups/cups/Makefile | head -35
+          grep -A 30 "define Build/Configure" package/cups/Makefile | head -35
 
           echo "CONFIG_PACKAGE_cups=m" >> .config
           echo "CONFIG_PACKAGE_libcups=m" >> .config
@@ -126,7 +124,7 @@ jobs:
           # Double-check: Verify our Makefile is in place BEFORE building
           echo "=== VERIFY: Makefile just before build ==="
           echo "--- Package/libcups/install section ---"
-          grep -A 3 "define Package/libcups/install" feeds/cups/cups/Makefile
+          grep -A 3 "define Package/libcups/install" package/cups/Makefile
           
           # Check configure generated
           BDIR="build_dir/target-aarch64_cortex-a53_musl/cups-2.4.16"
@@ -140,7 +138,7 @@ jobs:
           fi
 
           # First run make but allow failure so we can inspect
-          make feeds/cups/cups/compile V=s -j1 2>&1 | tee /tmp/cups-build.log || true
+          make package/cups/compile V=s -j1 2>&1 | tee /tmp/cups-build.log || true
 
           # Check what got installed and where
           BDIR="build_dir/target-aarch64_cortex-a53_musl/cups-2.4.16"

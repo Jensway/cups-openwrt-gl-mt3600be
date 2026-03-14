@@ -103,10 +103,12 @@ jobs:
           
           # CRITICAL: Convert leading spaces (4 spaces) to tabs in all define blocks
           # This is required for OpenWrt Makefiles - make requires tabs, not spaces
-          sed -i 's/^    /\t/g' feeds/cups/cups/Makefile
+          # Run multiple times to handle any number of leading spaces
+          for i in 1 2 3 4 5; do sed -i 's/^ /\t/g' feeds/cups/cups/Makefile; done
           
-          # Also convert 2-space indentation used in some sections
-          sed -i 's/^  /\t/g' feeds/cups/cups/Makefile
+          # DEBUG: Verify the actual characters around line 292
+          echo "=== DEBUG: Line 292 content ==="
+          sed -n '290,295p' feeds/cups/cups/Makefile | cat -A
           
           # VERIFY: Show our key changes in the copied Makefile
           echo "=== VERIFY: Key Makefile sections ==="
